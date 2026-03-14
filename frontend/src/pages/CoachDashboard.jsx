@@ -1,27 +1,38 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import {
-    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell
+    PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 
-const COLORS = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
+const COLORS = ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#a78bfa'];
 
 export default function CoachDashboard() {
     const [data, setData] = useState(null);
+    const [error, setError] = useState(null);
     const [selectedPlayer, setSelectedPlayer] = useState(null);
     const [playerDetail, setPlayerDetail] = useState(null);
 
-    useEffect(() => { api.getCoachDashboard().then(setData); }, []);
+    useEffect(() => {
+        api.getCoachDashboard()
+            .then(d => { console.log('Coach data:', d); setData(d); })
+            .catch(e => { console.error('Coach error:', e); setError(e.message); });
+    }, []);
 
-    const loadPlayer = async (id) => {
+    const viewPlayer = async (id) => {
         setSelectedPlayer(id);
-        const detail = await api.getPlayer(id);
-        setPlayerDetail(detail);
+        try {
+            const detail = await api.getPlayer(id);
+            setPlayerDetail(detail);
+        } catch (e) { console.error(e); }
     };
 
+    if (error) return <div className="loading-container"><p style={{ color: 'var(--danger)' }}>Error: {error}</p></div>;
     if (!data) return <div className="loading-container"><div className="spinner" /><p>Loading coach dashboard...</p></div>;
+
+    const summary = data.summary || {};
+    const perfDistData = Object.entries(data.performance_distribution || {}).map(([k, v]) => ({ name: k, value: v }));
+    const compData = Object.entries(data.squad_composition || {}).map(([k, v]) => ({ name: k, value: v }));
 
     const radarData = playerDetail ? [
         { skill: 'Attack', value: playerDetail.attack_score || 0 },
@@ -36,137 +47,57 @@ export default function CoachDashboard() {
         <div>
             <div className="page-header">
                 <h2>🧑‍🏫 Coach Dashboard</h2>
-                <p>Monitor player performance, track injury risks, and manage your squad</p>
+                <p>Monitor squad performance, injury alerts, and player development</p>
             </div>
 
             <div className="grid-4" style={{ marginBottom: 24 }}>
                 <div className="stat-card">
                     <div className="stat-icon">👥</div>
-                    <div className="stat-value">{data.summary.total_players.toLocaleString()}</div>
+                    <div className="stat-value">{(summary.total_players || 0).toLocaleString()}</div>
                     <div className="stat-label">Total Players</div>
                 </div>
                 <div className="stat-card">
-                    <div className="stat-icon">📊</div>
-                    <div className="stat-value">{data.summary.avg_performance}</div>
-                    <div className="stat-label">Avg Performance</div>
-                </div>
-                <div className="stat-card">
                     <div className="stat-icon">⭐</div>
-                    <div className="stat-value">{data.summary.avg_rating}</div>
+                    <div className="stat-value">{summary.avg_rating || 0}</div>
                     <div className="stat-label">Avg Rating</div>
                 </div>
                 <div className="stat-card">
+                    <div className="stat-icon">📊</div>
+                    <div className="stat-value">{summary.avg_performance || 0}</div>
+                    <div className="stat-label">Avg Performance</div>
+                </div>
+                <div className="stat-card">
                     <div className="stat-icon">🏥</div>
-                    <div className="stat-value" style={{ color: 'var(--danger)' }}>{data.summary.high_risk_count}</div>
+                    <div className="stat-value" style={{ color: 'var(--danger)' }}>{summary.high_risk_count || 0}</div>
                     <div className="stat-label">High Injury Risk</div>
                 </div>
             </div>
 
-            <div className="grid-2" style={{ marginBottom: 24 }}>
-                <div className="card">
-                    <div className="card-header"><div className="card-title">🏆 Top Performers</div></div>
-                    <table className="data-table">
-                        <thead><tr><th>Rank</th><th>Player</th><th>Rating</th><th>Performance</th><th>Action</th></tr></thead>
-                        <tbody>
-                            {data.top_performers.map((p, i) => (
-                                <tr key={i}>
-                                    <td style={{ fontWeight: 700, color: i < 3 ? '#f59e0b' : 'var(--text-muted)' }}>#{i + 1}</td>
-                                    <td style={{ fontWeight: 600 }}>{p.player_name}</td>
-                                    <td><span className="badge badge-info">{p.overall_rating}</span></td>
-                                    <td><span className="badge badge-success">{p.performance_score}</span></td>
-                                    <td><button className="btn btn-ghost" onClick={() => loadPlayer(p.player_api_id)} style={{ padding: '4px 10px', fontSize: 11 }}>View</button></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="card">
-                    <div className="card-header"><div className="card-title">🚨 Injury Risk Alerts</div></div>
-                    <table className="data-table">
-                        <thead><tr><th>Player</th><th>Rating</th><th>Risk</th><th>Factors</th></tr></thead>
-                        <tbody>
-                            {data.high_risk_players.map((p, i) => (
-                                <tr key={i}>
-                                    <td style={{ fontWeight: 600 }}>{p.player_name}</td>
-                                    <td>{p.overall_rating}</td>
-                                    <td><span className="badge badge-danger">{p.risk_probability}%</span></td>
-                                    <td style={{ fontSize: 11 }}>{(p.risk_factors || []).slice(0, 2).join(', ')}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className="grid-2" style={{ marginBottom: 24 }}>
-                <div className="card">
-                    <div className="card-header"><div className="card-title">📊 Performance Distribution</div></div>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <BarChart data={Object.entries(data.performance_distribution).map(([k, v]) => ({ level: k, count: v }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                            <XAxis dataKey="level" stroke="#64748b" fontSize={11} />
-                            <YAxis stroke="#64748b" fontSize={11} />
-                            <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                            <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                                {Object.keys(data.performance_distribution).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-
-                <div className="card">
-                    <div className="card-header"><div className="card-title">🎯 Squad Composition (Clusters)</div></div>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                            <Pie data={data.squad_composition} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={40} label={({ name, count }) => `${name.split(' ').slice(0, 2).join(' ')}: ${count}`} labelLine={false}>
-                                {data.squad_composition.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
-
+            {/* Player detail modal */}
             {playerDetail && (
-                <div className="card" style={{ marginBottom: 24 }}>
+                <div className="card" style={{ marginBottom: 20 }}>
                     <div className="card-header">
-                        <div>
-                            <div className="card-title">🔍 {playerDetail.player_name}</div>
-                            <div className="card-subtitle">Age: {playerDetail.age} | {playerDetail.preferred_foot} foot | {playerDetail.cluster_name || 'Unclassified'}</div>
-                        </div>
-                        <button className="btn btn-ghost" onClick={() => { setSelectedPlayer(null); setPlayerDetail(null); }}>✕</button>
+                        <div className="card-title">🔍 {playerDetail.player_name}</div>
+                        <button className="btn btn-ghost" onClick={() => { setSelectedPlayer(null); setPlayerDetail(null); }}>✕ Close</button>
                     </div>
                     <div className="grid-2">
                         <div>
-                            <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-                                <div className="stat-card" style={{ flex: 1, minWidth: 100 }}>
-                                    <div className="stat-value" style={{ fontSize: 20 }}>{playerDetail.overall_rating}</div>
-                                    <div className="stat-label">Overall</div>
-                                </div>
-                                <div className="stat-card" style={{ flex: 1, minWidth: 100 }}>
-                                    <div className="stat-value" style={{ fontSize: 20 }}>{playerDetail.potential}</div>
-                                    <div className="stat-label">Potential</div>
-                                </div>
-                                <div className="stat-card" style={{ flex: 1, minWidth: 100 }}>
-                                    <div className="stat-value" style={{ fontSize: 20 }}>{playerDetail.performance_score}</div>
-                                    <div className="stat-label">Performance</div>
-                                </div>
+                            <div className="grid-3" style={{ marginBottom: 12 }}>
+                                {[['overall_rating', 'Rating'], ['potential', 'Potential'], ['performance_score', 'Performance']].map(([k, l]) => (
+                                    <div key={k} className="stat-card" style={{ padding: 14 }}>
+                                        <div className="stat-value" style={{ fontSize: 22 }}>{playerDetail[k]}</div>
+                                        <div className="stat-label">{l}</div>
+                                    </div>
+                                ))}
                             </div>
                             {playerDetail.injury_risk && (
-                                <div style={{ padding: 16, background: playerDetail.injury_risk.risk_level === 'High' ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', borderRadius: 12, border: `1px solid ${playerDetail.injury_risk.risk_level === 'High' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                                    <div style={{ fontWeight: 700, marginBottom: 8 }}>
-                                        {playerDetail.injury_risk.risk_level === 'High' ? '🔴' : '🟢'} Injury Risk: {playerDetail.injury_risk.risk_level} ({playerDetail.injury_risk.risk_probability}%)
-                                    </div>
-                                    {playerDetail.injury_risk.risk_factors?.length > 0 && (
-                                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                                            {playerDetail.injury_risk.risk_factors.map((f, i) => <div key={i}>⚠️ {f}</div>)}
-                                        </div>
-                                    )}
+                                <div style={{ padding: 12, borderRadius: 10, background: playerDetail.injury_risk.risk_level === 'High' ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)', border: `1px solid ${playerDetail.injury_risk.risk_level === 'High' ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}` }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{playerDetail.injury_risk.risk_level === 'High' ? '🔴' : '🟢'} Injury Risk: {playerDetail.injury_risk.risk_level}</div>
+                                    {(playerDetail.injury_risk.risk_factors || []).map((f, i) => <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)' }}>⚠️ {f}</div>)}
                                 </div>
                             )}
                         </div>
-                        <ResponsiveContainer width="100%" height={260}>
+                        <ResponsiveContainer width="100%" height={240}>
                             <RadarChart data={radarData}>
                                 <PolarGrid stroke="rgba(255,255,255,0.1)" />
                                 <PolarAngleAxis dataKey="skill" stroke="#94a3b8" fontSize={11} />
@@ -177,6 +108,82 @@ export default function CoachDashboard() {
                     </div>
                 </div>
             )}
+
+            <div className="grid-2" style={{ marginBottom: 24 }}>
+                {/* Top performers */}
+                <div className="card">
+                    <div className="card-header"><div className="card-title">🏆 Top Performers</div></div>
+                    <table className="data-table">
+                        <thead><tr><th>#</th><th>Player</th><th>Rating</th><th>Potential</th><th>Perf</th><th></th></tr></thead>
+                        <tbody>
+                            {(data.top_performers || []).map((p, i) => (
+                                <tr key={i}>
+                                    <td style={{ fontWeight: 700, color: '#f59e0b' }}>{i + 1}</td>
+                                    <td style={{ fontWeight: 600 }}>{p.player_name}</td>
+                                    <td><span className="badge badge-info">{p.overall_rating}</span></td>
+                                    <td>{p.potential}</td>
+                                    <td><span className="badge badge-success">{p.performance_score}</span></td>
+                                    <td><button className="btn btn-ghost" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => viewPlayer(p.player_api_id)}>View</button></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Injury alerts */}
+                <div className="card">
+                    <div className="card-header"><div className="card-title">🏥 Injury Risk Alerts</div></div>
+                    <table className="data-table">
+                        <thead><tr><th>Player</th><th>Fatigue</th><th>Load</th><th>Risk</th></tr></thead>
+                        <tbody>
+                            {(data.injury_alerts || []).map((p, i) => (
+                                <tr key={i}>
+                                    <td style={{ fontWeight: 600 }}>{p.player_name}</td>
+                                    <td><span className="badge badge-danger">{p.fatigue_index}</span></td>
+                                    <td>{p.training_load}</td>
+                                    <td><span className="badge badge-danger">{p.injury_risk}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="grid-2">
+                {/* Performance distribution */}
+                <div className="card">
+                    <div className="card-header"><div className="card-title">📊 Performance Distribution</div></div>
+                    {perfDistData.length > 0 && (
+                        <ResponsiveContainer width="100%" height={250}>
+                            <BarChart data={perfDistData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                                <YAxis stroke="#64748b" fontSize={11} />
+                                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                                    {perfDistData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </div>
+
+                {/* Squad composition */}
+                <div className="card">
+                    <div className="card-header"><div className="card-title">🎯 Squad Composition</div></div>
+                    {compData.length > 0 && (
+                        <ResponsiveContainer width="100%" height={250}>
+                            <PieChart>
+                                <Pie data={compData} cx="50%" cy="50%" outerRadius={90} innerRadius={45} dataKey="value"
+                                    label={({ name, value }) => `${name.split(' ')[0]}: ${value}`}>
+                                    {compData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                </Pie>
+                                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
