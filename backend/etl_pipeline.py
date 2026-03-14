@@ -202,7 +202,7 @@ class ETLPipeline:
                 (10 - sleep_hours) * 0.1 +
                 np.random.normal(0, 0.1)
             )
-            injury_risk = 1 if risk_score > 1.8 else 0
+            injury_risk = 1 if risk_score > 5.3 else 0
 
             records.append({
                 'player_api_id': p['player_api_id'],
